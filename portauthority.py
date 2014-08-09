@@ -175,11 +175,12 @@ class Prediction(object):
     periodically.
     """
     
-    def __init__(self, timestring, route, stop):
+    def __init__(self, timestring, route, stop, bus_to=""):
         self.arrival = self.parse_time(timestring)
         self.route = route
         self.stop = Stop(stop, text=stopname(stop))
         self.when = datetime.now()
+        self.bus_to = bus_to
     
     @classmethod
     def parse_time(self, timestring):
@@ -336,7 +337,8 @@ def next_bus(stop_id, route="all"):
         for prediction in parser.findall('pre'):
             timestring = (prediction.find('pt').text, prediction.find('pu').text)
             routenum = prediction.find('rn').text
-            yield Prediction(timestring, routenum, stop_id)
+            bus_to = prediction.find('fd').text
+            yield Prediction(timestring, routenum, stop_id, bus_to=bus_to)
 
 def next_stop(busid):
     """

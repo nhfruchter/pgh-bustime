@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block body %}
+	{% if arrivals %}
+		{% for prediction in arrivals %}
+			<div class="prediction">
+				<span class="board route">{{ prediction.route }} {{ prediction.bus_to }}</span>
+				<span class="board time">{{ prediction.arrival }} </span>
+			</div>	
+		{% endfor %}
+	{% else %}	
+		<span class="board">N/A</span>
+	{% endif %}	
+{% endblock %}
