@@ -1,26 +1,10 @@
 # pgh-bustime
 
-A Python interface to the Port Authority's semi-public real time bus data API.
+This doesn't quite use the official API, but it doesn't seem like they're approving API keys yet(?) 
 
-## Undocumented API information
-[The Port Authority's realtime tracking site](http://realtime.portauthority.org) uses an undocumented API to grab its information. Luckily, it's public-facing and outputs relatively readable XML files.
-
-Endpoints that I've found:
-
-* `http://realtime.portauthority.org/bustime/map/getBusPredictions.jsp?bus=%s`
-	* ETA/"next stop" predictions by vehicle ID.
-* `http://realtime.portauthority.org/bustime/map/getBusesForRoute.jsp?route=%s`
-	* All busses on a particular route (e.g., P1).
-* `http://realtime.portauthority.org/bustime/eta/getStopPredictionsETA.jsp?route=%s&stop=%s`
-	* ETA for bus arrivals at a particular stop.  You can filter by route, or get all busses coming to the stop by setting your route to "all".
-* `http://realtime.portauthority.org/bustime/map/getStopsForRouteDirection.jsp?route=%s&direction=%s`
-	* Get all bus stops on a route going either "INBOUND" or "OUTBOUND"
-* `http://realtime.portauthority.org/bustime/map/getStopPredictions.jsp?route=%s&stop=%s`
-	* Seems to be the same as `getStopPredictionsETA` except it gives more info on the stop (name, for example).
-	* This is just currently used to get stop names. Maybe not the right use.
+Still, I wanted to prototype, so this happened. Will be updated once access to the real API is available.
 
 ## Examples
-
 ### ETA at a particular bus stop
 From the route:
 
