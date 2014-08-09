@@ -52,16 +52,25 @@ class Bus(object):
 
     def __init__(self, id, route, loc, direction, dest):
         self.id = id
-        assert type(loc) is tuple
         self.loc = loc
         self.outbound = direction
         self.dest = dest
         self.route = route
         self.when = datetime.now()
+        self._next_stop = next_stop(self.id)
 
     def freshness(self):
         return (datetime.now() - self.when).seconds
-
+        
+    @property
+    def next_stops(self):    
+        if type(self._next_stop) != list:
+            self._next_stop = list(self._next_stop)
+        return self._next_stop
+        
+    def update_next_stops(self):
+        self._next_stop = next_stop(self.id)
+        
     def __repr__(self):
         return "<Bus #%s route='%s %s' - currently @ %s - freshness %ss>" % (self.id, self.route, self.dest, self.loc, self.freshness())
         
@@ -95,10 +104,27 @@ class Route(object):
             self._busses = list(self._busses)
         return self._busses
     
+    def find_stop(self, stopname):
+        """Search for a stop name."""
+        found = [stop for stop in self.stops if stopname.lower() in stop.text.lower()]
+        if len(found) < 1:
+            return False
+        elif len(found) == 1:
+            return found[0]
+        else:
+            return found    
+            
+    def get_stop(self, stopid):
+        found = [stop for stop in self.stops if stop.id == stopid] 
+        if found:
+            return found[0]
+        else:
+            raise KeyError("Stop #%s not found." % stopid)     
+    
     def update(self):
         """Refresh information about busses on the route."""
         logging.getLogger(__name__).debug("Updating information on busses...")
-        self._busses = get_busses_on_route(self.routenum)
+        self._busses = get_busses(self.routenum)
         
 class Stop(object):
     """
@@ -114,7 +140,7 @@ class Stop(object):
         self.id = id
         self.text = text
         if fetch:
-            self.arriving_busses = get_stop_prediction(self.id)
+            self.arriving_busses = next_bus(self.id)
         else:
             self.arriving_busses = False    
         
@@ -135,7 +161,7 @@ class Stop(object):
     def update_arrivals(self):
         """Refresh the list of arrivals at the stop."""
         logging.getLogger(__name__).debug("Updating information on bus arrivals at %s..." % self)
-        self.arriving_busses = get_stop_prediction(self.id)
+        self.arriving_busses = next_bus(self.id)
                 
 class Prediction(object): 
     """
@@ -202,9 +228,26 @@ class BusPrediction(Prediction):
     def __init__(self, arrival, busid, stop):
         self.arrival = self.parse_time(arrival)
         self.when = datetime.now()
+        # TODO: Stop name to ID so this can be made into a stop object
         self.stop = stop
-        # TODO: Lookup bus info by ID?
         self.bus = busid
+        
+    def parse_time(self, pt):
+        pt = pt.lower()
+        if 'approaching' == pt:
+            return True
+        elif 'less than' in pt:
+            # Less than 2 minutes? ehhh, 1 minute
+            return timedelta(minutes=1)
+        elif 'min' in pt:
+            # "2 MIN" -> ("2", "MIN") -> 2
+            minutes = int(pt.split(' ')[0])
+            return timedelta(minutes=minutes)
+        else:
+            raise ValueError("Unsupported ETA %s." % pt)    
+    
+    def __str__(self):
+        return "<BusPrediction for bus #%s arriving at %s in %s>" % (self.bus, self.stop, self.arrival)
 
 # Helper functions
 def grabxml(url):
@@ -224,11 +267,11 @@ def get_route(routenum):
     Returns a `Route` for `routenum` populated with a list of
     busses on the route and stops that the route serves.
     """
-    busses = get_busses_on_route(routenum)
-    stops = get_stops_for_route(routenum)
+    busses = get_busses(routenum)
+    stops = all_stops(routenum, "inbound") + all_stops(routenum, "outbound")
     return Route(routenum, stops, busses)
     
-def get_busses_on_route(routenum):
+def get_busses(routenum):
     """
     Returns a list of busses currently trackable on a certain `routenum`.
     Each bus will have location data.
@@ -243,8 +286,8 @@ def get_busses_on_route(routenum):
         for bus in parser.findall("bus"):
             yield Bus.fromxml(bus)
         
-@lru_cache(100)
-def get_stops_for_route(routenum, outbound=True):
+@lru_cache(500)
+def all_stops(routenum, direction):
     """
     Get a list of all stops on a route given a `routenum`.  Set `outbound`
     to False to get a list of stops on a route's run towards downtown. 
@@ -252,7 +295,13 @@ def get_stops_for_route(routenum, outbound=True):
     Each stop contains an `arriving_busses` attribute that represents a generator
     of predicted ETAs.
     """
-    direction = "OUTBOUND" if outbound else "INBOUND"
+    _valid_directions = ["INBOUND", "OUTBOUND"]
+    
+    if direction.upper() not in _valid_directions:
+        raise ValueError("%s is not a valid direction. Valid directions: %s" % (direction, _valid_directions) )
+    else:
+        direction = direction.upper()
+        
     parser = grabxml( API_ROUTE%(routenum,direction) )
     
     if parser.find('id').text != str(routenum): 
@@ -260,18 +309,19 @@ def get_stops_for_route(routenum, outbound=True):
     elif not parser.find('stops').find('stop'):
         raise RouteNotFoundError(ERRORS['invalid_id'])
     else:
-        stops = {}
+        stops = []
         for stop in parser.find('stops').findall('stop'):
             name, stop_id = stop.find('name').text, stop.find('id').text
             if name and stop_id:
-                stops[int(stop_id)] = Stop(stop_id, text=name, fetch=True)
+                this_stop =  Stop(int(stop_id), text=name, fetch=True)
+                stops.append(this_stop)
         if stops:
-            logging.getLogger(__name__).debug("Found %s stops on route" % len(stops.keys()))
+            logging.getLogger(__name__).debug("Found %s stops on route" % len(stops))
             return stops
         else:
             raise BustimeError("There are no stops listed for this route.")  
             
-def get_stop_prediction(stop_id, route="all"):
+def next_bus(stop_id, route="all"):
     """
     Get bus ETA data for a certain `stop_id`.  Returns a `Prediction`.
     Data defaults to predictions on all routes (`route = "all"`) but a
@@ -282,12 +332,13 @@ def get_stop_prediction(stop_id, route="all"):
     if parser.find("noPredictionmessage"):
         raise NoBusPrediction()
     else:    
+        # Each prediction is wrapped in a <pre> tag
         for prediction in parser.findall('pre'):
             timestring = (prediction.find('pt').text, prediction.find('pu').text)
             routenum = prediction.find('rn').text
             yield Prediction(timestring, routenum, stop_id)
 
-def get_bus_prediction(busid):
+def next_stop(busid):
     """
     Get arrival predictions for a particular bus. Not sure how helpful this 
     is (unless you want to know how long it'll take for the bus you're on to
@@ -297,25 +348,14 @@ def get_bus_prediction(busid):
     
     Returns a list of `Prediction` objects.
     """
-    def pt_to_time(pt):
-        pt = pt.lower()
-        if 'approaching' == pt:
-            return True
-        elif 'less than' in pt:
-            # Less than 2 minutes? ehhh, 1 minute
-            return timedelta(minutes=1)
-        elif 'min' in pt:
-            # "2 MIN" -> ("2", "MIN") -> 2
-            minutes = int(pt.split(' '))[0]
-            return timedelta(minutes=minutes)
-        else:
-            raise ValueError("Unsupported ETA %s." % pt)
     
     parser = grabxml(API_BUS % busid)
     if parser.find('pr'):
+        # Each next stop prediction is wrapped in a <pr> tag
         for prediction in parser.findall('pr'):
-            eta = pt_to_time(prediction.find('pt'))
-            stop = prediction.find('stop')
+            eta = prediction.find('pt').text
+            stop = prediction.find('st').text
+            yield BusPrediction(eta, busid, stop)
     else:
         raise NoBusPrediction()    
         
