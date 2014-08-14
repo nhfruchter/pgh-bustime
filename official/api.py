@@ -1,13 +1,13 @@
 import requests
 import xmltodict
-from repoze.lru import LRUCache
+from repoze.lru import LRUCache, lru_cache
 
 from utils import *
 
 class BustimeError(Exception): pass
 class BustimeWarning(Exception): pass
 
-class PAACBustime(object):
+class BustimeAPI(object):
     """
     A `requests` wrapper around the Port Authority's bustime API with
     some basic error handling and some useful conversions (like an
@@ -49,27 +49,13 @@ class PAACBustime(object):
     RESPONSE_TOKEN = "bustime-response"
     ERROR_TOKEN = "error"
 
-    def __init__(self, apikey, locale="en_US", _format="json", tmres="s", cache=False):
+    def __init__(self, apikey, locale="en_US", _format="json", tmres="s"):
         self.key = apikey
         self.format = _format
         self.args = dict(
             localestring = locale,
             tmres = tmres
         )
-        
-        if cache:
-            # Set up the caches: currently caching items that won't really update on
-            # any meaningful timeframe (e.g., routes, stops).
-            self.CACHES = dict( 
-                routes = LRUCache(100)        # Currently 103 routes - as of 8/14
-                route_directions = LRUCache(100)
-                stops = LRUCache(500)         # Currently 6932 stops - as of 8/14
-                geopatterns = LRUCache(100)
-            )
-            # Reassign functions to their cached counterparts
-            for func_name, cache in self.CACHES:
-                cached_func = CachedFunction(self.func_name)
-                self.func_name = cached_func
             
     def endpoint(self, endpt, argdict=None):
         """
@@ -99,7 +85,7 @@ class PAACBustime(object):
             if self.format == 'json':
                 parsed = xmltodict.parse(resp)
                 errors = parsed[self.RESPONSE_TOKEN][self.ERROR_TOKEN]
-                messages = ", ".join(err['msg'] for err in errors)
+                messages = " ".join(["{}: {}".format(k,v) for k, v in errors.items()])
             elif self.format == 'xml':
                 import xml.etree.ElementTree as ET
                 errors = ET.fromstring(resp).findall(self.ERROR_TOKEN)
@@ -169,12 +155,13 @@ class PAACBustime(object):
             raise ValueError("You must specify either the `vid` or `rt` parameter.")
 
         # Turn list into comma separated string
-        if listlike(rt): rt = ",".join(rt)
-        if listlike(vid): vid = ",".join(vid)
+        if listlike(rt): rt = ",".join( map(str, rt) )
+        if listlike(vid): vid = ",".join( map(str, vid) )
 
         url = self.endpoint('VEHICLES', dict(vid=vid, rt=rt))        
         return self.response(url)
         
+    @lru_cache(100)
     def routes(self):
         """
         Return a list of routes currently tracked by the API.
@@ -192,6 +179,7 @@ class PAACBustime(object):
         """
         return self.response(self.endpoint('ROUTES'))
         
+    @lru_cache(100)
     def route_directions(self, rt):
         """
         Return a list of directions for a route.
@@ -211,7 +199,7 @@ class PAACBustime(object):
         url = self.endpoint('R_DIRECTIONS', dict(rt=rt))
         return self.response(url)
 
-
+    @lru_cache(1024)
     def stops(self, rt, direction):
         """
         Return a list of stops for a particular route.
@@ -229,7 +217,7 @@ class PAACBustime(object):
                 
         http://realtime.portauthority.org/bustime/apidoc/v1/main.jsp?section=stops.jsp        
         """
-        url = self.endpoint('STOPS', dict(rt=rt, dir=directions))
+        url = self.endpoint('STOPS', dict(rt=rt, dir=direction))
         return self.response(url)
     
     def geopatterns(self, rt=None, pid=None):
@@ -266,10 +254,16 @@ class PAACBustime(object):
             ValueError("You must specify either the `rt` or `pid` parameter.")
 
         if listlike(pid): vid = ",".join(vid)
-
+        
         url = self.endpoint("R_GEO", dict(rt=rt, pid=pid))            
-        return self.response(url)    
+        
+        return self._lru_geopatterns(url)    
     
+    @lru_cache(1024)
+    def _lru_geopatterns(self, url):
+        # @lru_cache doesn't support kwargs so this is a bit of a workaround...
+        return self.response(url)    
+        
     def predictions(self, stpid="", rt="", vid="", maxpredictions=""):
         """
         Retrieve predictions for 1+ stops or 1+ vehicles.
@@ -302,8 +296,10 @@ class PAACBustime(object):
         
         if (stpid and vid) or (rt and vid):
             raise ValueError("These parameters cannot be specified simultaneously.")
-        if not (stpid or rt or vid):
+        elif not (stpid or rt or vid):
             raise ValueError("You must specify a parameter.")   
+        else:
+            raise ValueError    
             
         if listlike(stpid): stpid = ",".join(stpid)
         if listlike(rt): rt = ",".join(rt)

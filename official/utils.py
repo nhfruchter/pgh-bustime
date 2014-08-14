@@ -29,8 +29,8 @@ def queryjoin(argdict=dict(), **kwargs):
     """
     if kwargs:
         argdict.update(kwargs)
-    if issubclass(type(argdict), dict):
-        args = ["{}={}".format(k, v) for k, v in argdict.items()]
+    if issubclass(type(argdict), dict):                    
+        args = ["{}={}".format(k, v) for k, v in argdict.items() if v != None]
     return "&".join(args)
     
 def listlike(obj):
