@@ -4,7 +4,10 @@ from collections import namedtuple
 from utils import listlike
 
 class Bus(object):
+    """Represents an individual vehicle on a route with a location."""
+    
     @classmethod
+    @lru_cache(5, timeout=10) # Cache for slightly less than the location refresh time
     def get(_class, api, vid):
         """
         Return a Bus object for a certain vehicle ID `vid` using API
@@ -18,16 +21,16 @@ class Bus(object):
         """
         Return a Bus object from an API response dict.
         """
-
+        bus = apiresponse
         return _class(
             api = api,
             vid = bus['vid'],
-            timeupdated = datetime.strptime(bus['tmstp'], api.STRPTIME),
-            lat = bus['lat'],
-            lng = bus['lng'],
+            timeupdated = datetime.strptime(bus['tmstmp'], api.STRPTIME),
+            lat = float(bus['lat']),
+            lng = float(bus['lon']),
             heading = bus['hdg'],
             pid = bus['pid'],
-            dist_into_route = bus['pdist'],
+            intotrip = bus['pdist'],
             route = bus['rt'],
             destination = bus['des'],
             speed = bus['spd'],
@@ -39,6 +42,7 @@ class Bus(object):
         self.vid = vid
         self.timeupdated = timeupdated
         self.location = (lat, lng)
+        self.heading = int(heading)
         self.patternid = pid
         self.dist_in_trip = intotrip
         self.route = route
@@ -55,28 +59,34 @@ class Bus(object):
     def update(self):
         """Update this bus by creating a new one and transplanting dictionaries."""
         vehicle = self.api.vehicles(vid=self.vid)['vehicle']
-        self.__dict__ = self.fromapi(vehicle).__dict__
+        newbus = self.fromapi(self.api, vehicle)
+        self.__dict__ = newbus.__dict__
+        del newbus
     
     @property
     def pattern(self):
         return self.api.geopatterns(pid=self.patternid)
     
     @property
-    @lru_cache(10, timeout=15)
     def predictions(self):
         """Generator that yields prediction objects from an API response."""
         for prediction in self.api.predictions(vid=self.vid)['prd']:
-            yield Prediction.fromapi(prediction)
+            pobj = Prediction.fromapi(self.api, prediction)
+            pobj._busobj = self
+            yield pobj
                 
     @property
+    @lru_cache(1, timeout=10)
     def next_stop(self):
         """Return the next stop for this bus."""
         p = self.api.predictions(vid=self.vid)['prd']
-        return Prediction.fromapi(p[0])
-    
+        pobj = Prediction.fromapi(self.api, p[0])
+        pobj._busobj = self
+        return pobj
         
 class Route(object):
-    ALL = {} # store list of all routes currently
+    """Represents a certain bus route (e.g. P1). Also contains a list of all the valid routes."""
+    all_routes = {} # store list of all routes currently
     
     @classmethod
     def get(_class, api, rt):
@@ -90,10 +100,10 @@ class Route(object):
                 allroutes[str(rtobject.number)] = rtobject
             return allroutes
                 
-        if not _class.ALL:
-            _class.ALL = update_list(api.routes()['route'])
+        if not _class.all_routes:
+            _class.all_routes = update_list(api.routes()['route'])
 
-        return _class.ALL[str(rt)]
+        return _class.all_routes[str(rt)]
         
     @classmethod
     def fromapi(_class, api, apiresponse):
@@ -126,13 +136,16 @@ class Route(object):
     
     @property
     def busses(self):
-        # TODO turn into Bus objects
         apiresp = self.api.vehicles(rt=self.number)['vehicle']
         if type(apiresp) is list:
             for busdict in apiresp:
-                yield Bus.fromapi(api, busdict)
+                busobj = Bus.fromapi(self.api, busdict)
+                busobj.route = self
+                yield busobj
         else:
-            yield Bus.fromapi(api, busdict)        
+                busobj = Bus.fromapi(self.api, busdict)
+                busobj.route = self
+                yield busobj
         
     @property
     def directions(self):
@@ -152,7 +165,7 @@ class Route(object):
     @property    
     def outbound_stops(self):
         try:
-            return self._tops['outbound']
+            return self.stops['outbound']
         except:    
             outboundstops = self.api.stops(self.number, "OUTBOUND")['stop']
             self.stops['outbound'] = [StopWithLocation.fromapi(self.api, stop) for stop in outboundstops]
@@ -174,14 +187,17 @@ class Route(object):
             stops = self.outbound_stops
         else:
             stops = self.inbound_stops + self.outbound_stops
-                   
+        
+        found = []
         for stop in stops:
             q = str(query).lower()
             if q in stop.name.lower() or q in str(stop.id).lower():
-                yield stop
+                found.append(stop)
+        return found
     
 class Stop(object):
     """Represents a single stop."""
+    
     @classmethod
     def get(_class, api, stpid):
         """
@@ -212,16 +228,28 @@ class Stop(object):
         route identifier for ETAs specific to one route, or leave `route`
         blank (done by default) to get information on all arriving busses.
         """   
-        for prediction in self.api.predictions(stpid=self.id, rt=route)['prd']:
-            yield Prediction.fromapi(prediction)
-        
+        apiresponse = self.api.predictions(stpid=self.id, rt=route)['prd']
+        if type(apiresponse) is list:        
+            for prediction in apiresponse:
+                pobj = Prediction.fromapi(self.api, prediction)
+                pobj._stopobj = self
+                yield pobj
+        else:
+            pobj = Prediction.fromapi(self.api, apiresponse)
+            pobj._stopobj = self
+            yield pobj
+                
     @property
     @lru_cache(2, timeout=60*60*2)
     def bulletins(self):
-        for b in self.api.bulletins(stpid=self.id)['sb']:
-            yield Bulletin.fromapi(b)
+        apiresponse = self.api.bulletins(stpid=self.id)
+        if apiresponse:
+            for b in apiresponse['sb']:
+                yield Bulletin.fromapi(b)
 
 class StopWithLocation(Stop):      
+    """Represents a Stop with an added location parameter."""
+    
     def get(self):
         raise NotImplementedError
         
@@ -238,7 +266,7 @@ class StopWithLocation(Stop):
         self.location = location
     
     def __str__(self):
-        name = "(Unnamed)" or self.name
+        name = self.name or "(Unnamed)" 
         return "<Stop #{} {} at {}>".format(self.id, name, self.location)
     
     def __repr__(self):
@@ -246,26 +274,16 @@ class StopWithLocation(Stop):
         return "{}({}, {}, {})".format(classname, self.id, self.name, self.location)            
         
 class Prediction(object):
+    """Represents an ETA or ETD prediction for a certain Bus and/or Stop."""
+    
     pstop = namedtuple("predicted_stop", ['id', 'name', 'feet_to'])
 
-    # @classmethod
-    # def for_stop(_class, api, stpid, rt=None):
-    #     """
-    #     Get a Prediction object for stop `stpid`, optionally limiting
-    #     to route `rt` using API instance `api`.
-    #     """
-    #     if rt:
-    #         p = api.prediction(stpid=stpid, rt=rt)['prd']
-    #     else:
-    #         p = api.prediction(stpid=stpid)[]
-
-    
     @classmethod
     def fromapi(_class, api, apiresponse):
-        generated_time = datetime.strptime(apiresponse['tmstp'], api.STRPTIME)
+        generated_time = datetime.strptime(apiresponse['tmstmp'], api.STRPTIME)
         arrival = True if apiresponse['typ'] == 'A' else False
         bus = apiresponse['vid']
-        stop = _class.pstop(apiresponse['stpid'], apiresonse['stpnm'],  apiresponse['dstp'])
+        stop = _class.pstop(apiresponse['stpid'], apiresponse['stpnm'], int(apiresponse['dstp']))
         route = apiresponse['rt']
         destination = apiresponse['des']
         et = datetime.strptime(apiresponse['prdtm'], api.STRPTIME)
@@ -275,34 +293,34 @@ class Prediction(object):
         
     def __init__(self, api, eta, is_arrival, delayed, generated, stop, route, destination, bus):
         self.api = api
-        self.eta = eta
-        self.is_arrival = is_arrival
+        self.eta = eta # Datetime ETA
+        self.is_arrival = is_arrival # Is
         self.delayed = delayed
     
         self.generated = generated
     
         self._stop = stop
-        self._route, self.destination = route, destination
+        self.route, self.destination = route, destination
         self._vid = bus
-        
+
     def __str__(self):
-        return "<Prediction> ETA: {} Bus: {} Stop: {} - Freshness: {} ago".format(self.eta, self.bus, self.stop, self.freshness)
+        phrase = "ETA" if self.is_arrival else "ETD"
+        return "<Prediction> {}: {} Bus: {} Stop: {} - Freshness: {} ago".format(phrase, self.eta, self.bus, self.stop, self.freshness)
     
     def __repr__(self):
         return str(self)
         
     @property
     def bus(self):
-        return Bus.fromapi(self.api.vehicles(vid=self._vid)['vehicles'])
-        
-    @property
-    def route(self):
-        rtnm = self.destination.split(" to ")[0]
-        return Route(self.api, self.route, rtnm)
+        if not hasattr(self, "_busobj"):
+            self._busobj = Bus.fromapi(self.api, self.api.vehicles(vid=self._vid)['vehicle'])
+        return self._busobj    
         
     @property
     def stop(self):
-        return Stop(self.api, self._stop.id, stop._stop.name, (None, None))
+        if not hasattr(self, "_stopobj"):
+            self._stopobj = Stop(self.api, self._stop.id, self._stop.name)
+        return self._stopobj
         
     @property
     def dist_to_stop(self):
@@ -310,7 +328,8 @@ class Prediction(object):
         
     @property
     def freshness(self):
-        return datetime.now() - self.generated
+        change = divmod((datetime.now() - self.generated).total_seconds(), 60)
+        return timedelta(minutes=change[0], seconds=change[1])
         
 class Bulletin(object):    
     """
