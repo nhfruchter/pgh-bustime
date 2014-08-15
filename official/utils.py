@@ -39,3 +39,46 @@ def listlike(obj):
     return hasattr(obj, "__iter__") \
     and not issubclass(type(obj), str)\
     and not issubclass(type(obj), unicode)
+
+def patterntogeojson(pattern):
+    from geojson import Point, Feature, FeatureCollection
+    
+    """
+    Turns an an API response of a pattern into a GeoJSON FeatureCollection.
+    Takes a dict that contains at least `pid`, `ln`, `rtdir`, and `pt`.
+    
+    >>> api_response = {'ln': '123.45', 'pid': '1', 'pt': [], 'rtdir': 'OUTBOUND'}
+    >>> pt1 = {'lat': '40.449', 'lon': '-79.983', 'seq': '1', 'typ': 'W'}
+    >>> pt2 = {'stpid': '1', 'seq': '2', 'stpnm': '3142 Test Ave FS', 'lon': '-79.984', 'pdist': '42.4', 'lat': '40.450', 'typ': 'S'}
+    >>> api_response['pt'] = [pt1, pt2]
+    >>> patterntogeojson(api_response) # doctest: +ELLIPSIS
+    {"features": [{"geometry": {"coordinates": ... "name": "3142 Test Ave FS", "type": "stop"}, "type": "Feature"}], "type": "FeatureCollection"}
+    """ 
+    # Base properties for the pattern
+    properties = dict(
+        pid = pattern['pid'],
+        length = pattern['ln'],
+        direction = pattern['rtdir']
+    )
+    
+    pattern_features = []
+    
+    for point in pattern['pt']:
+        # Base properties for each point
+        pointprops = dict(
+            i = int(point.get('seq')),
+            type = "waypoint" if point.get('typ') == 'W' else "stop"
+        )
+        location = (float(point.get('lon')), float(point.get('lat')))
+        # If it's a stop, add stop information
+        if pointprops['type'] == 'stop':
+            stop = dict(
+                id = int(point.get('stpid')),
+                name = point.get('stpnm'),
+                dist_into_route = float(point.get('pdist'))
+            )
+            pointprops.update(stop)
+        # Create a Feature to encapsulate the point and properties    
+        pattern_features.append( Feature(geometry=Point(location), properties=pointprops ) )
+    
+    return FeatureCollection(pattern_features)    
