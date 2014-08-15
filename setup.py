@@ -3,7 +3,7 @@ import logging, os.path
 
 
 setup(
-    name = "pghbustime"
+    name = "pghbustime",
     version = "0.1",
     packages = find_packages(),
     install_requires = ['xmltodict>=0.9.0', 'requests>=2.0.0', 'repoze.lru'],
