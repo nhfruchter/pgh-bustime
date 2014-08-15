@@ -1,51 +1,18 @@
 from datetime import datetime, timedelta
 from repoze.lru import lru_cache
 from collections import namedtuple 
-
-def patterntogeojson(pattern):
-    from geojson import Point, Feature, FeatureCollection
-    
-    """
-    Turns an an API response of a pattern into a GeoJSON FeatureCollection.
-    Takes a dict that contains at least `pid`, `ln`, `rtdir`, and `pt`.
-    
-    >>> api_response = {'ln': '123.45', 'pid': '1', 'pt': [], 'rtdir': 'OUTBOUND'}
-    >>> pt1 = {'lat': '40.449', 'lon': '-79.983', 'seq': '1', 'typ': 'W'}
-    >>> pt2 = {'stpid': '1', 'seq': '2', 'stpnm': '3142 Test Ave FS', 'lon': '-79.984', 'pdist': '42.4', 'lat': '40.450', 'typ': 'S'}
-    >>> api_response['pt'] = [pt1, pt2]
-    >>> patterntogeojson(api_response) # doctest: +ELLIPSIS
-    {"features": [{"geometry": {"coordinates": ... "name": "3142 Test Ave FS", "type": "stop"}, "type": "Feature"}], "type": "FeatureCollection"}
-    """ 
-    # Base properties for the pattern
-    properties = dict(
-        pid = pattern['pid'],
-        length = pattern['ln'],
-        direction = pattern['rtdir']
-    )
-    
-    pattern_features = []
-    
-    for point in pattern['pt']:
-        # Base properties for each point
-        pointprops = dict(
-            i = int(point.get('seq')),
-            type = "waypoint" if point.get('typ') == 'W' else "stop"
-        )
-        location = (float(point.get('lon')), float(point.get('lat')))
-        # If it's a stop, add stop information
-        if pointprops['type'] == 'stop':
-            stop = dict(
-                id = int(point.get('stpid')),
-                name = point.get('stpnm'),
-                dist_into_route = float(point.get('pdist'))
-            )
-            pointprops.update(stop)
-        # Create a Feature to encapsulate the point and properties    
-        pattern_features.append( Feature(geometry=Point(location), properties=pointprops ) )
-    
-    return FeatureCollection(pattern_features)
+from utils import listlike
 
 class Bus(object):
+    @classmethod
+    def get(_class, api, vid):
+        """
+        Return a Bus object for a certain vehicle ID `vid` using API
+        instance `api`.
+        """
+        busses = api.vehicles(vid=vid)['vehicle']   
+        return _class.fromapi(api, api.vehicles(vid=vid)['vehicle'])
+        
     @classmethod
     def fromapi(_class, api, apiresponse):
         """
@@ -109,6 +76,25 @@ class Bus(object):
     
         
 class Route(object):
+    ALL = {} # store list of all routes currently
+    
+    @classmethod
+    def get(_class, api, rt):
+        """
+        Return a Route object for route `rt` using API instance `api`.
+        """
+        def update_list(rtdicts):
+            allroutes = {}
+            for rtdict in rtdicts:
+                rtobject = Route.fromapi(api, rtdict)
+                allroutes[str(rtobject.number)] = rtobject
+            return allroutes
+                
+        if not _class.ALL:
+            _class.ALL = update_list(api.routes()['route'])
+
+        return _class.ALL[str(rt)]
+        
     @classmethod
     def fromapi(_class, api, apiresponse):
         return _class(api, apiresponse['rt'], apiresponse['rtnm'])
@@ -124,13 +110,15 @@ class Route(object):
     
     def __repr__(self):
         classname = self.__class__.__name__
-        return "{}({},{})".format(classname, self.name, self.number)
+        return "{}({}, {})".format(classname, self.name, self.number)
 
     @property
     @lru_cache(2, timeout=60*60*2)
     def bulletins(self):
-        for b in self.api.bulletins(rt=self.number)['sb']:
-            yield Bulletin.fromapi(b)
+        apiresponse = self.api.bulletins(rt=self.number)
+        if apiresponse:
+            for b in apiresponse['sb']:
+                yield Bulletin.fromapi(b)
     
     @property
     def patterns(self):
@@ -139,31 +127,36 @@ class Route(object):
     @property
     def busses(self):
         # TODO turn into Bus objects
-        yield self.api.vehicles(rt=self.number)
+        apiresp = self.api.vehicles(rt=self.number)['vehicle']
+        if type(apiresp) is list:
+            for busdict in apiresp:
+                yield Bus.fromapi(api, busdict)
+        else:
+            yield Bus.fromapi(api, busdict)        
         
     @property
     def directions(self):
-        if not self._directions:
+        if not hasattr(self, "_directions"):
             self._directions = self.api.route_directions(self.number)['dir']
         return self._directions    
         
     @property    
     def inbound_stops(self):
         try:
-            return self._stops['inbound']
+            return self.stops['inbound']
         except:    
             inboundstops = self.api.stops(self.number, "INBOUND")['stop']
-            self._stops['inbound'] = [Stop.fromapi(stop) for stop in inboundstops]
-            return self._stops['inbound']
+            self.stops['inbound'] = [StopWithLocation.fromapi(self.api, stop) for stop in inboundstops]
+            return self.stops['inbound']
         
     @property    
     def outbound_stops(self):
         try:
-            return self._stops['outbound']
+            return self._tops['outbound']
         except:    
             outboundstops = self.api.stops(self.number, "OUTBOUND")['stop']
-            self._stops['outbound'] = [Stop.fromapi(stop) for stop in outboundstops]
-            return self._stops['outbound']
+            self.stops['outbound'] = [StopWithLocation.fromapi(self.api, stop) for stop in outboundstops]
+            return self.stops['outbound']
             
     def find_stop(self, query, direction=""):
         """
@@ -185,31 +178,33 @@ class Route(object):
         for stop in stops:
             q = str(query).lower()
             if q in stop.name.lower() or q in str(stop.id).lower():
-                yield q
-        
+                yield stop
+    
 class Stop(object):
     """Represents a single stop."""
     @classmethod
-    def fromapi(_class, api, apiresponse):
-        location = (apiresponse['lat'], apiresponse['lon'])
-        stpid = apiresponse['stpid']
-        # There might not be names occasionally
-        name = apiresponse.get('stpnm') 
-        return _class(stpid, name, location)
-    
-    def __init__(self, api, _id, name, location):
+    def get(_class, api, stpid):
+        """
+        Returns a Stop object for stop # `stpid` using API instance `api`.
+        The API doesn't support looking up information for an individual stop,
+        so all stops generated using Stop.get only have stop ID # info attached.
+        
+        Getting a stop from a Route is the recommended method of finding a specific
+        stop (using `find_stop`/`inbound_stop`/`outbound_stop` functions).
+        
+        >>> Stop.get(1605)
+        Stop(1605, "(Unnamed)")
+        """
+        return _class(api, stpid, "(Unnamed)")
+            
+    def __init__(self, api, _id, name):
         self.api = api
         self.id = _id
-        self.name = name
-        self.location = location
-        
-    def __str__(self):
-        name = "(Unnamed)" or self.name
-        return "<Stop #{} {} at {}>".format(self.id, name, self.location)
+        self.name = name        
         
     def __repr__(self):
         classname = self.__class__.__name__
-        return "{}({},{},{})".format(classname, self.id, self.name, self.location)
+        return "{}({}, {})".format(classname, self.id, self.name)
     
     def predictions(self, route=''):
         """
@@ -217,7 +212,7 @@ class Stop(object):
         route identifier for ETAs specific to one route, or leave `route`
         blank (done by default) to get information on all arriving busses.
         """   
-        for prediction in self.api.predictions(stpid=self.id, rt=rt)['prd']:
+        for prediction in self.api.predictions(stpid=self.id, rt=route)['prd']:
             yield Prediction.fromapi(prediction)
         
     @property
@@ -225,9 +220,45 @@ class Stop(object):
     def bulletins(self):
         for b in self.api.bulletins(stpid=self.id)['sb']:
             yield Bulletin.fromapi(b)
+
+class StopWithLocation(Stop):      
+    def get(self):
+        raise NotImplementedError
+        
+    @classmethod
+    def fromapi(_class, api, apiresponse):
+        location = (apiresponse['lat'], apiresponse['lon'])
+        stpid = apiresponse['stpid']
+        # There might not be names occasionally
+        name = apiresponse.get('stpnm') 
+        return _class(api, stpid, name, location)
+        
+    def __init__(self, api, _id, name, location):
+        super(StopWithLocation, self).__init__(api, _id, name)
+        self.location = location
+    
+    def __str__(self):
+        name = "(Unnamed)" or self.name
+        return "<Stop #{} {} at {}>".format(self.id, name, self.location)
+    
+    def __repr__(self):
+        classname = self.__class__.__name__
+        return "{}({}, {}, {})".format(classname, self.id, self.name, self.location)            
         
 class Prediction(object):
     pstop = namedtuple("predicted_stop", ['id', 'name', 'feet_to'])
+
+    # @classmethod
+    # def for_stop(_class, api, stpid, rt=None):
+    #     """
+    #     Get a Prediction object for stop `stpid`, optionally limiting
+    #     to route `rt` using API instance `api`.
+    #     """
+    #     if rt:
+    #         p = api.prediction(stpid=stpid, rt=rt)['prd']
+    #     else:
+    #         p = api.prediction(stpid=stpid)[]
+
     
     @classmethod
     def fromapi(_class, api, apiresponse):
@@ -254,6 +285,12 @@ class Prediction(object):
         self._route, self.destination = route, destination
         self._vid = bus
         
+    def __str__(self):
+        return "<Prediction> ETA: {} Bus: {} Stop: {} - Freshness: {} ago".format(self.eta, self.bus, self.stop, self.freshness)
+    
+    def __repr__(self):
+        return str(self)
+        
     @property
     def bus(self):
         return Bus.fromapi(self.api.vehicles(vid=self._vid)['vehicles'])
@@ -271,13 +308,32 @@ class Prediction(object):
     def dist_to_stop(self):
         return self._stop.feet_to    
         
-    
+    @property
+    def freshness(self):
+        return datetime.now() - self.generated
+        
 class Bulletin(object):    
     """
     A service bulletin, usually representing a detour or other type of
     route change.
     """
     affected_service = namedtuple('affected_service', ['type', 'id', 'name'])
+    @classmethod
+    def get(_class, api, rt=None, rtdir=None, stpid=None):        
+        if not (rt or stpid) or (rtdir and not (rt or stpid)):
+            raise ValueError("You must specify a parameter.")   
+
+        if listlike(stpid): stpid = ",".join(stpid)
+        if listlike(rt): rt = ",".join(rt)
+        
+        bulletins = api.bulletins(rt=rt, rtdir=rtdir, stpid=stpid)
+        
+        if bulletins:
+            bulletins = bulletins['sb']
+            if type(bulletins) is list:
+                return [_class.fromapi(b) for b in bulletins]
+            else:
+                return _class.fromapi(bulletins)        
     
     @classmethod 
     def fromapi(_class, apiresponse):
