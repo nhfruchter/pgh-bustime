@@ -46,9 +46,11 @@ class BustimeAPI(object):
         PREDICTION = "http://realtime.portauthority.org/bustime/api/v1/getpredictions",
         BULLETINS = "http://realtime.portauthority.org/bustime/api/v1/getservicebulletins"
     )
+    
     RESPONSE_TOKEN = "bustime-response"
     ERROR_TOKEN = "error"
-
+    STRPTIME = "%Y%m%d %H:%M:%S"
+    
     def __init__(self, apikey, locale="en_US", _format="json", tmres="s"):
         self.key = apikey
         self.format = _format
@@ -253,7 +255,7 @@ class BustimeAPI(object):
         if not (rt or pid):
             ValueError("You must specify either the `rt` or `pid` parameter.")
 
-        if listlike(pid): vid = ",".join(vid)
+        if listlike(pid): pid = ",".join(pid)
         
         url = self.endpoint("R_GEO", dict(rt=rt, pid=pid))            
         
@@ -298,9 +300,7 @@ class BustimeAPI(object):
             raise ValueError("These parameters cannot be specified simultaneously.")
         elif not (stpid or rt or vid):
             raise ValueError("You must specify a parameter.")   
-        else:
-            raise ValueError    
-            
+        
         if listlike(stpid): stpid = ",".join(stpid)
         if listlike(rt): rt = ",".join(rt)
         if listlike(vid): vid = ",".join(vid)
