@@ -1,4 +1,4 @@
 *.pyc
 *.geojson
 unofficialapi*
-example
+example/
