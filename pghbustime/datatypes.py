@@ -29,7 +29,6 @@ class Bus(object):
             api = api,
             vid = bus['vid'],
             timeupdated = datetime.strptime(bus['tmstmp'], api.STRPTIME),
-            timeupdated = timezone("US/Eastern").localize(timeupdated)
             lat = float(bus['lat']),
             lng = float(bus['lon']),
             heading = bus['hdg'],
@@ -40,11 +39,11 @@ class Bus(object):
             speed = bus['spd'],
             delay = bus.get('dly') or False
         )             
-    
+
     def __init__(self, api, vid, timeupdated, lat, lng, heading, pid, intotrip, route, destination, speed, delay=False):
         self.api = api
         self.vid = vid
-        self.timeupdated = timeupdated
+        self.timeupdated = timezone("US/Eastern").localize(timeupdated)
         self.location = (lat, lng)
         self.heading = int(heading)
         self.patternid = pid
@@ -309,25 +308,23 @@ class Prediction(object):
     @classmethod
     def fromapi(_class, api, apiresponse):
         generated_time = datetime.strptime(apiresponse['tmstmp'], api.STRPTIME)
-        generated_time = timezone("US/Eastern").localize(generated_time)
         arrival = True if apiresponse['typ'] == 'A' else False
         bus = apiresponse['vid']
         stop = _class.pstop(apiresponse['stpid'], apiresponse['stpnm'], int(apiresponse['dstp']))
         route = apiresponse['rt']
         destination = apiresponse['des']
         et = datetime.strptime(apiresponse['prdtm'], api.STRPTIME)
-        et = timezone("US/Eastern").localize(et)
         delayed = bool(apiresponse.get('dly'))
         
         return _class(api, et, arrival, delayed, generated_time, stop, route, destination, bus)
         
     def __init__(self, api, eta, is_arrival, delayed, generated, stop, route, destination, bus):
         self.api = api
-        self.eta = eta # Datetime ETA
+        self.eta = timezone("US/Eastern").localize(eta) # Datetime ETA
         self.is_arrival = is_arrival # Is
         self.delayed = delayed
     
-        self.generated = generated
+        self.generated = timezone("US/Eastern").localize(generated)
     
         self._stop = stop
         self.route, self.destination = route, destination
