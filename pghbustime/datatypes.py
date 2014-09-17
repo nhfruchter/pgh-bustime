@@ -1,7 +1,10 @@
 from datetime import datetime, timedelta
 from repoze.lru import lru_cache
 from collections import namedtuple 
+from pytz import timezone
+
 from utils import listlike
+from interface import BustimeError, BustimeWarning
 
 class Bus(object):
     """Represents an individual vehicle on a route with a location."""
@@ -26,6 +29,7 @@ class Bus(object):
             api = api,
             vid = bus['vid'],
             timeupdated = datetime.strptime(bus['tmstmp'], api.STRPTIME),
+            timeupdated = timezone("US/Eastern").localize(timeupdated)
             lat = float(bus['lat']),
             lng = float(bus['lon']),
             heading = bus['hdg'],
@@ -84,24 +88,39 @@ class Bus(object):
         pobj._busobj = self
         return pobj
         
+class OfflineBus(Bus): 
+    """Sometimes, busses can be still present in the tracking system but not be
+    reporting live data back, which causes the API to fail. This object is a
+    representation for that case so the prediction function does not throw an
+    exception."""       
+    
+    def __init__(self, vid):
+        self.vid = vid
+        
+    def __str__(self):
+        return "<Bus #{}: NO DATA [Location Currently Offline]>".format(self.vid)
+        
+        
 class Route(object):
     """Represents a certain bus route (e.g. P1). Also contains a list of all the valid routes."""
     all_routes = {} # store list of all routes currently
+    
+    @classmethod
+    def update_list(_class, rtdicts):
+        allroutes = {}
+        for rtdict in rtdicts:
+            rtobject = Route.fromapi(api, rtdict)
+            allroutes[str(rtobject.number)] = rtobject
+        return allroutes
     
     @classmethod
     def get(_class, api, rt):
         """
         Return a Route object for route `rt` using API instance `api`.
         """
-        def update_list(rtdicts):
-            allroutes = {}
-            for rtdict in rtdicts:
-                rtobject = Route.fromapi(api, rtdict)
-                allroutes[str(rtobject.number)] = rtobject
-            return allroutes
-                
+             
         if not _class.all_routes:
-            _class.all_routes = update_list(api.routes()['route'])
+            _class.all_routes = self.update_list(api.routes()['route'])
 
         return _class.all_routes[str(rt)]
         
@@ -121,6 +140,9 @@ class Route(object):
     def __repr__(self):
         classname = self.__class__.__name__
         return "{}({}, {})".format(classname, self.name, self.number)
+        
+    def __hash__(self):
+        return hash(str(self))
 
     @property
     @lru_cache(2, timeout=60*60*2)
@@ -221,6 +243,9 @@ class Stop(object):
     def __repr__(self):
         classname = self.__class__.__name__
         return "{}({}, {})".format(classname, self.id, self.name)
+        
+    def __hash__(self):
+        return hash(str(self))
     
     def predictions(self, route=''):
         """
@@ -231,9 +256,12 @@ class Stop(object):
         apiresponse = self.api.predictions(stpid=self.id, rt=route)['prd']
         if type(apiresponse) is list:        
             for prediction in apiresponse:
-                pobj = Prediction.fromapi(self.api, prediction)
-                pobj._stopobj = self
-                yield pobj
+                try:
+                    pobj = Prediction.fromapi(self.api, prediction)
+                    pobj._stopobj = self
+                    yield pobj
+                except:
+                    continue    
         else:
             pobj = Prediction.fromapi(self.api, apiresponse)
             pobj._stopobj = self
@@ -281,12 +309,14 @@ class Prediction(object):
     @classmethod
     def fromapi(_class, api, apiresponse):
         generated_time = datetime.strptime(apiresponse['tmstmp'], api.STRPTIME)
+        generated_time = timezone("US/Eastern").localize(generated_time)
         arrival = True if apiresponse['typ'] == 'A' else False
         bus = apiresponse['vid']
         stop = _class.pstop(apiresponse['stpid'], apiresponse['stpnm'], int(apiresponse['dstp']))
         route = apiresponse['rt']
         destination = apiresponse['des']
         et = datetime.strptime(apiresponse['prdtm'], api.STRPTIME)
+        et = timezone("US/Eastern").localize(et)
         delayed = bool(apiresponse.get('dly'))
         
         return _class(api, et, arrival, delayed, generated_time, stop, route, destination, bus)
@@ -313,7 +343,10 @@ class Prediction(object):
     @property
     def bus(self):
         if not hasattr(self, "_busobj"):
-            self._busobj = Bus.fromapi(self.api, self.api.vehicles(vid=self._vid)['vehicle'])
+            try:
+                self._busobj = Bus.fromapi(self.api, self.api.vehicles(vid=self._vid)['vehicle'])
+            except BustimeError:
+                self._busobj = OfflineBus(self._vid)  
         return self._busobj    
         
     @property
@@ -398,3 +431,4 @@ class Bulletin(object):
             stops=self._stops,
             routes=self._routes
         )
+        

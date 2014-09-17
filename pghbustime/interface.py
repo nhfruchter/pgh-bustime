@@ -5,6 +5,7 @@ from repoze.lru import LRUCache, lru_cache
 from utils import *
 
 class BustimeError(Exception): pass
+class NoPredictionsError(BustimeError): pass
 class BustimeWarning(Exception): pass
 
 class BustimeAPI(object):

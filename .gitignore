@@ -1,4 +1,9 @@
 *.pyc
 *.geojson
 unofficialapi*
-example/
+example
+
+dist
+*.egg-info
+*.egg
+
