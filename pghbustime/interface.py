@@ -88,7 +88,7 @@ class BustimeAPI(object):
             if self.format == 'json':
                 parsed = xmltodict.parse(resp)
                 errors = parsed[self.RESPONSE_TOKEN][self.ERROR_TOKEN]
-                if len(errors) > 1
+                if len(errors) > 1:
                     messages = ", ".join([" ".join(["{}: {}".format(k,v) for k, v in e.items()]) for e in errors])
                 else:
                     messages = " ".join(["{}: {}".format(k,v) for k, v in errors.items()])    
