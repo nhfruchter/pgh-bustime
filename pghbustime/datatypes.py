@@ -312,18 +312,18 @@ class Prediction(object):
         bus = apiresponse['vid']
         stop = _class.pstop(apiresponse['stpid'], apiresponse['stpnm'], int(apiresponse['dstp']))
         route = apiresponse['rt']
+        direction = apiresponse['rtdir']
         destination = apiresponse['des']
         et = datetime.strptime(apiresponse['prdtm'], api.STRPTIME)
         delayed = bool(apiresponse.get('dly'))
         
-        return _class(api, et, arrival, delayed, generated_time, stop, route, destination, bus)
+        return _class(api, et, arrival, delayed, generated_time, stop, route, destination, bus, direction)
         
-    def __init__(self, api, eta, is_arrival, delayed, generated, stop, route, destination, bus):
+    def __init__(self, api, eta, is_arrival, delayed, generated, stop, route, destination, bus, direction):
         self.api = api
         self.eta = timezone("US/Eastern").localize(eta) # Datetime ETA
         self.is_arrival = is_arrival # Is
         self.delayed = delayed
-    
         self.generated = timezone("US/Eastern").localize(generated)
     
         self._stop = stop
@@ -332,7 +332,7 @@ class Prediction(object):
 
     def __str__(self):
         phrase = "ETA" if self.is_arrival else "ETD"
-        return "<Prediction> {}: {} Bus: {} Stop: {} - Freshness: {} ago".format(phrase, self.eta, self.bus, self.stop, self.freshness)
+        return "<Prediction> {}: {} Bus: {} Stop: {}".format(phrase, self.eta, self.bus, self.stop, self.freshness)
     
     def __repr__(self):
         return str(self)
@@ -358,7 +358,8 @@ class Prediction(object):
         
     @property
     def freshness(self):
-        change = divmod((datetime.now() - self.generated).total_seconds(), 60)
+        now = timezone("US/Eastern").localize(datetime.now())
+        change = divmod((now - self.generated).total_seconds(), 60)
         return timedelta(minutes=change[0], seconds=change[1])
         
 class Bulletin(object):    
