@@ -325,9 +325,9 @@ class Prediction(object):
         self.is_arrival = is_arrival # Is
         self.delayed = delayed
         self.generated = timezone("US/Eastern").localize(generated)
-    
         self._stop = stop
         self.route, self.destination = route, destination
+        self.direction = direction
         self._vid = bus
 
     def __str__(self):
