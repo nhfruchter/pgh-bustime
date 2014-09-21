@@ -358,7 +358,7 @@ class Prediction(object):
         
     @property
     def freshness(self):
-        now = timezone("US/Eastern").localize(datetime.now())
+        now = datetime.now(timezone("US/Eastern"))
         change = divmod((now - self.generated).total_seconds(), 60)
         return timedelta(minutes=change[0], seconds=change[1])
         
