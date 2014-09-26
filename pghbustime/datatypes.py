@@ -105,7 +105,7 @@ class Route(object):
     all_routes = {} # store list of all routes currently
     
     @classmethod
-    def update_list(_class, rtdicts):
+    def update_list(_class, api, rtdicts):
         allroutes = {}
         for rtdict in rtdicts:
             rtobject = Route.fromapi(api, rtdict)
@@ -119,7 +119,7 @@ class Route(object):
         """
              
         if not _class.all_routes:
-            _class.all_routes = self.update_list(api.routes()['route'])
+            _class.all_routes = _class.update_list(api, api.routes()['route'])
 
         return _class.all_routes[str(rt)]
         
