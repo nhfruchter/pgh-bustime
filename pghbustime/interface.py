@@ -65,9 +65,9 @@ class BustimeAPI(object):
         Construct API endpoint URLs using instance options in `self.args` 
         and local arguments passed to the function as a dictionary `argdict`.
         
-        >>> api = PAACBustime("BOGUSAPIKEY")
+        >>> api = BustimeAPI("BOGUSAPIKEY")
         >>> api.endpoint('VEHICLES') 
-        'http://realtime.portauthority.org/bustime/api/v1/getvehicles?key=BOGUSAPIKEY&tmres=s&localestring=en_US&format=json'
+        'http://realtime.portauthority.org/bustime/api/v1/getvehicles?key=BOGUSAPIKEY&tmres=s&localestring=en_US'
         >>> api.endpoint('PREDICTION', dict(stpid=4123, rt="61C"))
         'http://realtime.portauthority.org/bustime/api/v1/getpredictions?key=BOGUSAPIKEY&tmres=s&localestring=en_US&format=json&rt=61C&stpid=4123'
         """
@@ -81,37 +81,43 @@ class BustimeAPI(object):
         return "{}?{}".format(self.ENDPOINTS[endpt], querystring)
         
     def response(self, url):
-        """Validate and handle an API response."""
+        """Grab an API response."""
         
-        def errorhandle(resp):            
-            """Parse API error responses and raise appropriate exceptions."""
-            if self.format == 'json':
-                parsed = xmltodict.parse(resp)
-                errors = parsed[self.RESPONSE_TOKEN][self.ERROR_TOKEN]
-                # Create list of errors if more than one error response is given
-                if type(errors) is list and len(errors) > 1:
-                    messages = ", ".join([" ".join(["{}: {}".format(k,v) for k, v in e.items()]) for e in errors])
-                else:
-                    messages = " ".join(["{}: {}".format(k,v) for k, v in errors.items()])    
-            elif self.format == 'xml':
-                import xml.etree.ElementTree as ET
-                errors = ET.fromstring(resp).findall(self.ERROR_TOKEN)
-                messages = ", ".join(err.find('msg').text for err in errors)
-            else:
-                raise ValueError("Invalid API response format specified: {}." % self.format)        
-            
-            raise BustimeError("API returned: {}".format(messages))
-                
         resp = requests.get(url).content
+        return self.parseresponse(resp)        
+                        
+    def errorhandle(self, resp):            
+        """Parse API error responses and raise appropriate exceptions."""
+        if self.format == 'json':
+            parsed = xmltodict.parse(resp)
+            errors = parsed[self.RESPONSE_TOKEN][self.ERROR_TOKEN]
+            # Create list of errors if more than one error response is given
+            if type(errors) is list and len(errors) > 1:
+                messages = ", ".join([" ".join(["{}: {}".format(k,v) for k, v in e.items()]) for e in errors])
+            else:
+                messages = " ".join(["{}: {}".format(k,v) for k, v in errors.items()])    
+        elif self.format == 'xml':
+            import xml.etree.ElementTree as ET
+            errors = ET.fromstring(resp).findall(self.ERROR_TOKEN)
+            messages = ", ".join(err.find('msg').text for err in errors)
+        else:
+            raise ValueError("Invalid API response format specified: {}." % self.format)        
+        
+        raise BustimeError("API returned: {}".format(messages))            
+                
+    def parseresponse(self, resp):
+        """Parse an API response."""
+        
         if self.RESPONSE_TOKEN not in resp:
             raise BustimeError("The Bustime API returned an invalid response: {}".format(resp))
         elif self.ERROR_TOKEN in resp:
-            return errorhandle(resp)
+            return self.errorhandle(resp)
         else:
             if self.format == 'json':
                 return xmltodict.parse(resp)[self.RESPONSE_TOKEN]
             elif self.format == 'xml':
                 return resp
+        
     
     def systemtime(self):
         """

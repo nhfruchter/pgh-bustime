@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 setup(
     name="pgh-bustime",
-    version='0.2.0',
+    version='0.2.1',
     author='Nathaniel Fruchter',
     author_email='fruchter@cmu.edu',
     packages=['pghbustime'],
