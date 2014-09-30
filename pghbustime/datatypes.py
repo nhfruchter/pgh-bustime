@@ -125,12 +125,13 @@ class Route(object):
         
     @classmethod
     def fromapi(_class, api, apiresponse):
-        return _class(api, apiresponse['rt'], apiresponse['rtnm'])
+        return _class(api, apiresponse['rt'], apiresponse['rtnm'], apiresponse['rtclr'])
         
-    def __init__(self, api, number, name):
+    def __init__(self, api, number, name, color):
         self.api = api
         self.number = number
         self.name = name
+        self.color = color
         self.stops = {}
         
     def __str__(self):
@@ -164,7 +165,7 @@ class Route(object):
                 busobj.route = self
                 yield busobj
         else:
-                busobj = Bus.fromapi(self.api, busdict)
+                busobj = Bus.fromapi(self.api, apiresp)
                 busobj.route = self
                 yield busobj
         
