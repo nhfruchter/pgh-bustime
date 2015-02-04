@@ -39,6 +39,27 @@ class TestRespParser(TestAPI):
         	</bustime-response>""".strip()
     
         self.errxml = '<?xml version="1.0"?>\n<bustime-response><error><msg>Invalid API access key supplied</msg></error></bustime-response>'
+        self.mockbulletin = """<?xml version="1.0"?>
+<bustime-response>
+  <sb>
+    <sbj>Stop Relocation</sbj>
+    <dtl>The Westbound stop located at Madison/Lavergne has been moved...</dtl>
+    <brf>Westbound stop located at Madison/Lavergne is at NE corner.</brf>
+    <prty>low</prty>
+    <srvc>
+      <rt>20</rt>
+    </srvc>
+  </sb>
+  <sb>
+    <sbj>Stop Relocations/Eliminations</sbj>
+    <dtl>Bus stops are being changed to provide faster travel time.</dtl>
+    <brf>Bus stops are being changed to provide faster travel time.</brf>
+    <prty>low</prty>
+    <srvc>
+      <stpid>456</stpid>
+    </srvc>
+  </sb>
+</bustime-response>"""
 
     def test_correct_rt(self):
         self.assertEqual( self.validparse, self.api.parseresponse(self.validxml) )
@@ -90,7 +111,16 @@ class TestRespParser(TestAPI):
             passedB = True
             
         self.assertEquals(passedA, True)        
-        self.assertEquals(passedB, True)        
+        self.assertEquals(passedB, True)
+        
+    def test_bulletin(self):
+        bulletins = list(p.Bulletin.fromapi(self.api.parseresponse(self.mockbulletin)))
+        singleBulletin = bulletins[0]
+        
+        self.assertEquals(singleBulletin.subject, 'Stop Relocation')
+        self.assertEquals(singleBulletin.id, 'n/a')
+        self.assertEquals(len(singleBulletin.valid_for['routes']), 1)
+        self.assertEquals(singleBulletin.valid_for['routes'][0].id, '20')
         
 class TestUtils(unittest.TestCase):        
     def test_queryjoin(self):

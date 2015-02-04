@@ -385,28 +385,28 @@ class Bulletin(object):
     @classmethod 
     def fromapi(_class, apiresponse):
         """Create a bulletin object from an API response (dict), containing `sbj`, etc."""
+        for resp in apiresponse['sb']:
+            # Extract details from dict
+            _id = "n/a" or resp.get("nm")
+            subject = resp.get("sbj")
+            text = resp.get('dtl') + "\n" + resp.get('brf')
+            priority = "n/a" or resp.get('prty')
+            for_stops, for_routes = [], []
+            svc = resp.get('srvc')
         
-        # Extract details from dict
-        _id = "n/a" or apiresponse.get("nm")
-        subject = apiresponse.get("sbj")
-        text = apiresponse.get('dtl') + "\n" + apiresponse.get('brf')
-        priority = "n/a" or apiresponse.get('prty')
-        for_stops, for_routes = [], []
-        svc = apiresponse.get('srvc')
-        
-        # Create list of affected routes/stops, if there are any
-        if svc:
-            has_stop = 'stpid' in svc or 'stpnm' in svc
-            has_rt = 'rt' in svc or 'rtdir' in svc
+            # Create list of affected routes/stops, if there are any
+            if svc:
+                has_stop = 'stpid' in svc or 'stpnm' in svc
+                has_rt = 'rt' in svc or 'rtdir' in svc
             
-            if has_stop: 
-                aff = _class.affected_service('stop', svc.get('stpid'), svc.get('stpnm'))
-                for_stops.append(aff)
-            if has_rt:
-                aff = _class.affected_service('route', svc.get('rt'), svc.get('rtdir'))
-                for_routes.append(aff)
+                if has_stop: 
+                    aff = _class.affected_service('stop', svc.get('stpid'), svc.get('stpnm'))
+                    for_stops.append(aff)
+                if has_rt:
+                    aff = _class.affected_service('route', svc.get('rt'), svc.get('rtdir'))
+                    for_routes.append(aff)
 
-        return _class(_id, subject, text, priority, for_stops, for_routes)
+            yield _class(_id, subject, text, priority, for_stops, for_routes)
         
     def __init__(self, _id, subject, text, priority, for_stops=None, for_routes=None):
         self.id = _id
