@@ -1,25 +1,5 @@
 """Some utility functions and other stuff."""
 
-class CachedFunction(object):
-    """Generate an LRU cached function given a cache object."""
-    
-    def __init__(self, cache):
-        self.cache = cache
-
-    def __call__(self, f):
-        cache = self.cache
-        marker = _MARKER
-        def lru_cached(*arg):
-            val = cache.get(arg, marker)
-            if val is marker:
-                val = f(*arg)
-                cache.put(arg, val)
-            return val
-        lru_cached.__module__ = f.__module__
-        lru_cached.__name__ = f.__name__
-        lru_cached.__doc__ = f.__doc__
-        return lru_cached
-        
 def queryjoin(argdict=dict(), **kwargs):
     """Turn a dictionary into a querystring for a URL.
     
@@ -40,8 +20,8 @@ def listlike(obj):
     and not issubclass(type(obj), str)\
     and not issubclass(type(obj), unicode)
 
-def patterntogeojson(pattern):
-    from geojson import Point, Feature, FeatureCollection
+def patterntogeojson(pattern, color=False):
+    import geojson
     
     """
     Turns an an API response of a pattern into a GeoJSON FeatureCollection.
@@ -58,27 +38,10 @@ def patterntogeojson(pattern):
     properties = dict(
         pid = pattern['pid'],
         length = pattern['ln'],
-        direction = pattern['rtdir']
-    )
+        direction = pattern['rtdir'],
+        color = color or ""
+    )        
+        
+    points = [(float(point.get('lon')), float(point.get('lat'))) for point in pattern['pt']]
     
-    pattern_features = []
-    
-    for point in pattern['pt']:
-        # Base properties for each point
-        pointprops = dict(
-            i = int(point.get('seq')),
-            type = "waypoint" if point.get('typ') == 'W' else "stop"
-        )
-        location = (float(point.get('lon')), float(point.get('lat')))
-        # If it's a stop, add stop information
-        if pointprops['type'] == 'stop':
-            stop = dict(
-                id = int(point.get('stpid')),
-                name = point.get('stpnm'),
-                dist_into_route = float(point.get('pdist'))
-            )
-            pointprops.update(stop)
-        # Create a Feature to encapsulate the point and properties    
-        pattern_features.append( Feature(geometry=Point(location), properties=pointprops ) )
-    
-    return FeatureCollection(pattern_features)    
+    return geojson.LineString(coordinates=points, properties=properties)

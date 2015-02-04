@@ -103,15 +103,6 @@ class TestUtils(unittest.TestCase):
         self.assertEquals(p.utils.listlike((i for i in [])), True)
         self.assertEquals(p.utils.listlike("hello"), False)
         
-    def test_p2geojson(self):
-        api_response = {'ln': '123.45', 'pid': '1', 'pt': [], 'rtdir': 'OUTBOUND'}
-        pt1 = {'lat': '40.449', 'lon': '-79.983', 'seq': '1', 'typ': 'W'}
-        pt2 = {'stpid': '1', 'seq': '2', 'stpnm': '3142 Test Ave FS', 'lon': '-79.984', 'pdist': '42.4', 'lat': '40.450', 'typ': 'S'}
-        api_response['pt'] = [pt1, pt2]
-        geojson = p.utils.patterntogeojson(api_response)
-        
-        correctpkl = "ccopy_reg\n_reconstructor\np0\n(cgeojson.feature\nFeatureCollection\np1\nc__builtin__\ndict\np2\n(dp3\nS'type'\np4\nS'FeatureCollection'\np5\nsS'features'\np6\n(lp7\ng0\n(cgeojson.feature\nFeature\np8\ng2\n(dp9\nS'geometry'\np10\ng0\n(cgeojson.geometry\nPoint\np11\ng2\n(dp12\ng4\nS'Point'\np13\nsS'coordinates'\np14\n(F-79.983\nF40.449\ntp15\nstp16\nRp17\nsg4\nS'Feature'\np18\nsS'id'\np19\nNsS'properties'\np20\n(dp21\nS'i'\np22\nI1\nsg4\nS'waypoint'\np23\nsstp24\nRp25\nag0\n(g8\ng2\n(dp26\ng10\ng0\n(g11\ng2\n(dp27\ng4\ng13\nsg14\n(F-79.984\nF40.45\ntp28\nstp29\nRp30\nsg4\ng18\nsg19\nNsg20\n(dp31\ng22\nI2\nsS'dist_into_route'\np32\nF42.4\nsg4\nS'stop'\np33\nsS'name'\np34\nS'3142 Test Ave FS'\np35\nsg19\nI1\nsstp36\nRp37\nastp38\nRp39\n."
-        self.assertEquals(geojson, pickle.loads(correctpkl))
         
 class TestObjects(TestAPI):        
     def test_vehicles(self):

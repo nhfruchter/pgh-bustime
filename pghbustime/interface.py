@@ -1,10 +1,10 @@
 import requests
 import xmltodict
-from repoze.lru import LRUCache, lru_cache
 
 from utils import *
 
 class BustimeError(Exception): pass
+class APILimitExceeded(BustimeError): pass
 class NoPredictionsError(BustimeError): pass
 class BustimeWarning(Exception): pass
 
@@ -95,7 +95,11 @@ class BustimeAPI(object):
             if type(errors) is list and len(errors) > 1:
                 messages = ", ".join([" ".join(["{}: {}".format(k,v) for k, v in e.items()]) for e in errors])
             else:
-                messages = " ".join(["{}: {}".format(k,v) for k, v in errors.items()])    
+                overlimit = any('transaction limit' in msg.lower() for msg in errors.values())
+                if overlimit:
+                    raise APILimitExceeded("This API key has used up its daily quota of calls.")
+                else:    
+                    messages = " ".join(["{}: {}".format(k,v) for k, v in errors.items()])    
         elif self.format == 'xml':
             import xml.etree.ElementTree as ET
             errors = ET.fromstring(resp).findall(self.ERROR_TOKEN)
@@ -174,7 +178,6 @@ class BustimeAPI(object):
         url = self.endpoint('VEHICLES', dict(vid=vid, rt=rt))        
         return self.response(url)
         
-    @lru_cache(100)
     def routes(self):
         """
         Return a list of routes currently tracked by the API.
@@ -192,7 +195,6 @@ class BustimeAPI(object):
         """
         return self.response(self.endpoint('ROUTES'))
         
-    @lru_cache(100)
     def route_directions(self, rt):
         """
         Return a list of directions for a route.
@@ -212,7 +214,6 @@ class BustimeAPI(object):
         url = self.endpoint('R_DIRECTIONS', dict(rt=rt))
         return self.response(url)
 
-    @lru_cache(1024)
     def stops(self, rt, direction):
         """
         Return a list of stops for a particular route.
@@ -272,7 +273,6 @@ class BustimeAPI(object):
         
         return self._lru_geopatterns(url)    
     
-    @lru_cache(1024)
     def _lru_geopatterns(self, url):
         # @lru_cache doesn't support kwargs so this is a bit of a workaround...
         return self.response(url)    

@@ -55,5 +55,7 @@ You can chain everything together, too.  Find the next P3 bus at the outbound Ne
 	>>> Route.get(api, "P3").find_stop("Negley", "OUTBOUND")[0].predictions().next()
 	<Prediction> ETA: 2014-08-15 15:30:08 Bus: <Bus #3217 on P1 East Busway to Swissvale> - at (40.45962446281709, -79.96585441497434) as of 2014-08-15 15:26:13 
 	Stop: <Stop #20501 Negley Station stop A at (u'40.456606823343', u'-79.932646291005')> - Freshness: 00:04.936698 ago
-	
+
+### A note on caching
+Caching the results of your API queries in an expiring local store of some sort is highly recommended due to the API's somewhat restrictive initial limits. I highly recommend a Python LRU cache module or `memcache`.
 	

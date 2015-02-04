@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta
-from repoze.lru import lru_cache
 from collections import namedtuple 
 from pytz import timezone
 
@@ -10,7 +9,7 @@ class Bus(object):
     """Represents an individual vehicle on a route with a location."""
     
     @classmethod
-    @lru_cache(5, timeout=10) # Cache for slightly less than the location refresh time
+
     def get(_class, api, vid):
         """
         Return a Bus object for a certain vehicle ID `vid` using API
@@ -79,7 +78,6 @@ class Bus(object):
             yield pobj
                 
     @property
-    @lru_cache(1, timeout=10)
     def next_stop(self):
         """Return the next stop for this bus."""
         p = self.api.predictions(vid=self.vid)['prd']
@@ -145,7 +143,6 @@ class Route(object):
         return hash(str(self))
 
     @property
-    @lru_cache(2, timeout=60*60*2)
     def bulletins(self):
         apiresponse = self.api.bulletins(rt=self.number)
         if apiresponse:
@@ -268,7 +265,6 @@ class Stop(object):
             yield pobj
                 
     @property
-    @lru_cache(2, timeout=60*60*2)
     def bulletins(self):
         apiresponse = self.api.bulletins(stpid=self.id)
         if apiresponse:
