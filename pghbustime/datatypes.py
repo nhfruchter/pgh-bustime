@@ -149,6 +149,11 @@ class Route(object):
             for b in apiresponse['sb']:
                 yield Bulletin.fromapi(b)
     
+    @property 
+    def detours(self):
+        self._detours = self.api.detournotices(self.number)
+        return self._detours
+        
     @property
     def patterns(self):
         return self.api.geopatterns(rt=self.number)
@@ -426,4 +431,5 @@ class Bulletin(object):
             stops=self._stops,
             routes=self._routes
         )
+    
         

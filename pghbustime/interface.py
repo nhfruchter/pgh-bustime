@@ -355,4 +355,93 @@ class BustimeAPI(object):
         url = self.endpoint('BULLETINS', dict(rt=rt, rtdir=rtdir, stpid=stpid))    
         return self.response(url)
         
+    def detournotices(self, rt):
+        from BeautifulSoup import BeautifulSoup
+        from datetime import datetime
+        URL = "http://www.portauthority.org/paac/apps/detoursdnn/pgDetours.asp?mode=results&s=Route&Type=Detour"
+        _strptime = "%m/%d/%Y"
         
+        rt = str(rt)
+        formdata = {
+            "txtRoute": "0"*(4-len(rt)) + rt,
+            "submit1": "Search"
+        }
+        
+        data = requests.post(URL, data=formdata)
+        
+        if "No Detours are running" in data.content:
+            return False
+        else:
+            detours = []
+            parser = BeautifulSoup(data.content)
+            
+            titles = parser.findAll('td', attrs={'colspan': '2'})[0:-1]
+            dates = parser.findAll('td', attrs={'colspan': '1', 'class': 'RegularFormText'})
+            notices = zip(titles, dates)
+
+            for rawTitle, rawDates in notices:
+                title = rawTitle.p.a.text
+                memoID = dict(rawTitle.p.a.attrs)['href'].split("MemoID=")[-1]
+                fromDate, toDate = rawDates.p.text.replace('&nbsp;', ' ').replace('\r', '').replace('\n', '').replace('\t', '').split(' to ')
+
+                try:
+                    fromDate = datetime.strptime(fromDate, _strptime)
+                except:
+                    None
+                
+                try:
+                    toDate = datetime.strptime(toDate, _strptime)
+                except:
+                    None
+                
+                detour = DetourNotice(memoID, title, fromDate, toDate)                
+                detours.append(detour)
+
+            return detours
+                
+        
+class DetourNotice(object):        
+    """
+    A detour notice. Not directly grabbed from API since it seems that isn't possible,
+    but instead scraped directly from the Port Authority website. This could be
+    very unreliable, but it works as of May 2015.    
+    """
+    
+    BASE = "http://www.portauthority.org/paac/apps/detoursdnn/pgDetours.asp?mode=results&s=Route&Type=Detour"
+    
+    def __init__(self, memoID, title, start, finish):
+        self.memoID = str(memoID)
+        self.title = title
+        self.start = start
+        self.finish = finish
+    
+    def __str__(self):
+        return "{}".format(self.title)
+        
+    def __repr__(self):
+        return "DetourNotice(memoID={}, title={}, start={}, finish={})".format(self.memoID, self.title, self.start, self.finish)
+
+    @property
+    def url(self):
+        return "http://www.portauthority.org/paac/apps/detoursdnn/pgDetours.asp?mode=1&MemoID=" + self.memoID
+    
+    @property
+    def details(self):
+        if not hasattr(self, "_details"):
+            from BeautifulSoup import BeautifulSoup
+            data = requests.get(self.url)
+            if data.status_code != 200:
+                return "There was a problem retreiving this detour notice."
+            else:
+                parser = BeautifulSoup(data.content)   
+                text = [getattr(el, 'text') for el in parser.findAll('td', attrs={'class': 'RegularFormText'})]
+                text = [line.replace('&nbsp;', ' ').strip() for line in text]
+                routes = [getattr(el, 'text') for el in parser.findAll('td', attrs={'class': 'BoldFormText'})]
+                routes = [rt.split(' ')[0] for rt in routes]
+
+                self._details = {
+                    "routes": routes,
+                    "text": text
+                }
+            
+                return self._details
