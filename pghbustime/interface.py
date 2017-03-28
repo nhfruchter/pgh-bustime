@@ -1,5 +1,6 @@
 import requests
 import xmltodict
+import sys
 
 from utils import *
 
@@ -111,7 +112,10 @@ class BustimeAPI(object):
                 
     def parseresponse(self, resp):
         """Parse an API response."""
-        
+        # Support Python 3's bytes type from socket repsonses
+        if sys.version_info.major > 2:
+            resp = resp.decode('utf-8')
+	
         if self.RESPONSE_TOKEN not in resp:
             raise BustimeError("The Bustime API returned an invalid response: {}".format(resp))
         elif self.ERROR_TOKEN in resp:
