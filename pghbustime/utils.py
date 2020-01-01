@@ -10,15 +10,15 @@ def queryjoin(argdict=dict(), **kwargs):
     if kwargs: argdict.update(kwargs)
     
     if issubclass(type(argdict), dict):                    
-        args = ["{}={}".format(k, v) for k, v in argdict.items() if v != None]
-    return "&".join(args)
+        args = ["{}={}".format(k, v) for k, v in list(argdict.items()) if v != None]
+    return "&".join(sorted(args))
     
 def listlike(obj):
     """Is an object iterable like a list (and not a string)?"""
     
     return hasattr(obj, "__iter__") \
     and not issubclass(type(obj), str)\
-    and not issubclass(type(obj), unicode)
+    and not issubclass(type(obj), str)
 
 def patterntogeojson(pattern, color=False):
     import geojson

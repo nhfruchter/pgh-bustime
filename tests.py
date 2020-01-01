@@ -1,3 +1,4 @@
+from builtins import str
 import unittest
 import pghbustime as p
 import pickle
@@ -9,11 +10,11 @@ class TestAPI(unittest.TestCase):
         
 class TestEndpoint(TestAPI):
     def test_vehicle(self):
-        url = "http://realtime.portauthority.org/bustime/api/v1/getvehicles?key=BOGUSAPIKEY&tmres=s&localestring=en_US"
+        url = "http://realtime.portauthority.org/bustime/api/v1/getvehicles?key=BOGUSAPIKEY&localestring=en_US&tmres=s"
         self.assertEqual( self.api.endpoint('VEHICLES'), url )
     
     def test_pdict(self):
-        url = 'http://realtime.portauthority.org/bustime/api/v1/getpredictions?key=BOGUSAPIKEY&tmres=s&localestring=en_US&rt=28X&stpid=4123'
+        url = 'http://realtime.portauthority.org/bustime/api/v1/getpredictions?key=BOGUSAPIKEY&localestring=en_US&tmres=s&rt=28X&stpid=4123'
         generated = self.api.endpoint('PREDICTION', dict(stpid=4123, rt='28X') )
         self.assertEqual( generated, url )
         
@@ -71,7 +72,7 @@ class TestRespParser(TestAPI):
         except p.BustimeError:
             passed = True
         
-        self.assertEquals(passed, True)    
+        self.assertEqual(passed, True)    
         
     def test_errhandoff(self):
         try:
@@ -80,7 +81,7 @@ class TestRespParser(TestAPI):
         except p.BustimeError:
             passed = True    
             
-        self.assertEquals(passed, True)    
+        self.assertEqual(passed, True)    
         
     def test_invalidresp(self):
         try:
@@ -95,7 +96,7 @@ class TestRespParser(TestAPI):
         except KeyError:
             r = False
         
-        self.assertEquals(r, False)
+        self.assertEqual(r, False)
         
     def test_vid_args(self):
         try:
@@ -110,28 +111,28 @@ class TestRespParser(TestAPI):
         except ValueError:
             passedB = True
             
-        self.assertEquals(passedA, True)        
-        self.assertEquals(passedB, True)
+        self.assertEqual(passedA, True)        
+        self.assertEqual(passedB, True)
         
     def test_bulletin(self):
         bulletins = list(p.Bulletin.fromapi(self.api.parseresponse(self.mockbulletin)))
         singleBulletin = bulletins[0]
         
-        self.assertEquals(singleBulletin.subject, 'Stop Relocation')
-        self.assertEquals(singleBulletin.id, 'n/a')
-        self.assertEquals(len(singleBulletin.valid_for['routes']), 1)
-        self.assertEquals(singleBulletin.valid_for['routes'][0].id, '20')
+        self.assertEqual(singleBulletin.subject, 'Stop Relocation')
+        self.assertEqual(singleBulletin.id, 'n/a')
+        self.assertEqual(len(singleBulletin.valid_for['routes']), 1)
+        self.assertEqual(singleBulletin.valid_for['routes'][0].id, '20')
         
 class TestUtils(unittest.TestCase):        
     def test_queryjoin(self):
         args = dict(a=1, b=2, c="foo")
-        self.assertEquals( p.utils.queryjoin(args), 'a=1&c=foo&b=2')
+        self.assertEqual( p.utils.queryjoin(args), 'a=1&b=2&c=foo')
                 
     def test_listlike(self):
-        self.assertEquals(p.utils.listlike([]), True)
-        self.assertEquals(p.utils.listlike(()), True)
-        self.assertEquals(p.utils.listlike((i for i in [])), True)
-        self.assertEquals(p.utils.listlike("hello"), False)
+        self.assertEqual(p.utils.listlike([]), True)
+        self.assertEqual(p.utils.listlike(()), True)
+        self.assertEqual(p.utils.listlike((i for i in [])), True)
+        self.assertEqual(p.utils.listlike("hello"), False)
         
         
 class TestObjects(TestAPI):        
@@ -139,12 +140,12 @@ class TestObjects(TestAPI):
         bus5666 = OrderedDict([(u'vid', u'5666'), (u'tmstmp', u'20140925 22:46:33'), (u'lat', u'40.44886169433594'), (u'lon', u'-80.16286682128906'), (u'hdg', u'164'), (u'pid', u'2250'), (u'rt', u'28X'), (u'des', u'Oakland'), (u'pdist', u'49113'), (u'spd', u'16'), (u'tablockid', u'028X-022'), (u'tatripid', u'52562'), (u'zone', None)])
         bobj = p.Bus.fromapi(self.api, bus5666)
         result = "<Bus #5666 on 28X Oakland> - at (40.44886169433594, -80.16286682128906) as of 2014-09-25 22:46:33-04:00"
-        self.assertEquals(str(bobj), result)
-        self.assertEquals(bobj.api, self.api)
-        self.assertEquals(bobj.delayed, False)
-        self.assertEquals(bobj.dist_in_trip, "49113")
-        self.assertEquals(bobj.speed, "16")
-        self.assertEquals(bobj.patternid, "2250")
+        self.assertEqual(str(bobj), result)
+        self.assertEqual(bobj.api, self.api)
+        self.assertEqual(bobj.delayed, False)
+        self.assertEqual(bobj.dist_in_trip, "49113")
+        self.assertEqual(bobj.speed, "16")
+        self.assertEqual(bobj.patternid, "2250")
         
 if __name__ == '__main__':
     unittest.main()

@@ -1,9 +1,12 @@
+from __future__ import absolute_import
+from builtins import str
+from builtins import object
 from datetime import datetime, timedelta
 from collections import namedtuple 
 from pytz import timezone
 
-from utils import listlike
-from interface import BustimeError, BustimeWarning
+from .utils import listlike
+from .interface import BustimeError, BustimeWarning
 
 class Bus(object):
     """Represents an individual vehicle on a route with a location."""
