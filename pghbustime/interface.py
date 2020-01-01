@@ -117,9 +117,9 @@ class BustimeAPI(object):
     def parseresponse(self, resp):
         """Parse an API response."""
         
-        if self.RESPONSE_TOKEN not in resp:
+        if self.RESPONSE_TOKEN not in resp.decode("utf-8"):
             raise BustimeError("The Bustime API returned an invalid response: {}".format(resp))
-        elif self.ERROR_TOKEN in resp:
+        elif self.ERROR_TOKEN in resp.decode("utf-8"):
             return self.errorhandle(resp)
         else:
             if self.format == 'json':

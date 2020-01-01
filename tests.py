@@ -22,7 +22,7 @@ class TestRespParser(TestAPI):
     def setUp(self):
         self.api = p.BustimeAPI("BOGUSAPIKEY")
         self.validparse = OrderedDict([(u'route', [OrderedDict([(u'rt', u'13'), (u'rtnm', u'BELLEVUE'), (u'rtclr', u'#ff6666')]), OrderedDict([(u'rt', u'28X'), (u'rtnm', u'AIRPORT FLYER'), (u'rtclr', u'#b22222')])])])
-        self.validxml = """
+        self.validxml = b"""
         <?xml version="1.0"?>
         <bustime-response>
         	<route>
@@ -39,8 +39,8 @@ class TestRespParser(TestAPI):
 
         	</bustime-response>""".strip()
     
-        self.errxml = '<?xml version="1.0"?>\n<bustime-response><error><msg>Invalid API access key supplied</msg></error></bustime-response>'
-        self.mockbulletin = """<?xml version="1.0"?>
+        self.errxml = b'<?xml version="1.0"?>\n<bustime-response><error><msg>Invalid API access key supplied</msg></error></bustime-response>'
+        self.mockbulletin = b"""<?xml version="1.0"?>
 <bustime-response>
   <sb>
     <sbj>Stop Relocation</sbj>
@@ -85,7 +85,7 @@ class TestRespParser(TestAPI):
         
     def test_invalidresp(self):
         try:
-            self.api.parseresponse("thisshouldbreak")
+            self.api.parseresponse(b"thisshouldbreak")
             passed = False
         except p.BustimeError: 
             passed = True
