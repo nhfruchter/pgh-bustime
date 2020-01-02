@@ -5,6 +5,7 @@ from builtins import zip
 from builtins import object
 import requests
 import xmltodict
+import sys
 
 from .utils import *
 
