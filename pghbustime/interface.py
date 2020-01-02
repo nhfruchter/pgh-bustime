@@ -1,8 +1,13 @@
+from __future__ import absolute_import
+from builtins import str
+from builtins import map
+from builtins import zip
+from builtins import object
 import requests
 import xmltodict
 import sys
 
-from utils import *
+from .utils import *
 
 class BustimeError(Exception): pass
 class APILimitExceeded(BustimeError): pass
@@ -94,13 +99,13 @@ class BustimeAPI(object):
             errors = parsed[self.RESPONSE_TOKEN][self.ERROR_TOKEN]
             # Create list of errors if more than one error response is given
             if type(errors) is list and len(errors) > 1:
-                messages = ", ".join([" ".join(["{}: {}".format(k,v) for k, v in e.items()]) for e in errors])
+                messages = ", ".join([" ".join(["{}: {}".format(k,v) for k, v in list(e.items())]) for e in errors])
             else:
-                overlimit = any('transaction limit' in msg.lower() for msg in errors.values())
+                overlimit = any('transaction limit' in msg.lower() for msg in list(errors.values()))
                 if overlimit:
                     raise APILimitExceeded("This API key has used up its daily quota of calls.")
                 else:    
-                    messages = " ".join(["{}: {}".format(k,v) for k, v in errors.items()])    
+                    messages = " ".join(["{}: {}".format(k,v) for k, v in list(errors.items())])    
         elif self.format == 'xml':
             import xml.etree.ElementTree as ET
             errors = ET.fromstring(resp).findall(self.ERROR_TOKEN)
@@ -112,13 +117,10 @@ class BustimeAPI(object):
                 
     def parseresponse(self, resp):
         """Parse an API response."""
-        # Support Python 3's bytes type from socket repsonses
-        if sys.version_info.major > 2:
-            resp = resp.decode('utf-8')
-	
-        if self.RESPONSE_TOKEN not in resp:
+        
+        if self.RESPONSE_TOKEN not in resp.decode("utf-8"):
             raise BustimeError("The Bustime API returned an invalid response: {}".format(resp))
-        elif self.ERROR_TOKEN in resp:
+        elif self.ERROR_TOKEN in resp.decode("utf-8"):
             return self.errorhandle(resp)
         else:
             if self.format == 'json':
@@ -381,7 +383,7 @@ class BustimeAPI(object):
             
             titles = parser.findAll('td', attrs={'colspan': '2'})[0:-1]
             dates = parser.findAll('td', attrs={'colspan': '1', 'class': 'RegularFormText'})
-            notices = zip(titles, dates)
+            notices = list(zip(titles, dates))
 
             for rawTitle, rawDates in notices:
                 title = rawTitle.p.a.text
