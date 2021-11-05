@@ -3,6 +3,7 @@ from builtins import str
 from builtins import map
 from builtins import zip
 from builtins import object
+from urllib.parse import quote_plus
 import requests
 import xmltodict
 import sys
@@ -41,29 +42,31 @@ class BustimeAPI(object):
     http://realtime.portauthority.org/bustime/apidoc/v1/main.jsp?section=documentation.jsp
     """
     
-    __api_version__ = 'v1'
+    __api_version__ = 'v3'
     
     ENDPOINTS = dict(
-        SYSTIME = "http://realtime.portauthority.org/bustime/api/v1/gettime",
-        VEHICLES = "http://realtime.portauthority.org/bustime/api/v1/getvehicles",
-        ROUTES = "http://realtime.portauthority.org/bustime/api/v1/getroutes",
-        R_DIRECTIONS = "http://realtime.portauthority.org/bustime/api/v1/getdirections",
-        STOPS = "http://realtime.portauthority.org/bustime/api/v1/getstops",
-        R_GEO = "http://realtime.portauthority.org/bustime/api/v1/getpatterns",
-        PREDICTION = "http://realtime.portauthority.org/bustime/api/v1/getpredictions",
-        BULLETINS = "http://realtime.portauthority.org/bustime/api/v1/getservicebulletins"
+        SYSTIME = "http://realtime.portauthority.org/bustime/api/v3/gettime",
+        VEHICLES = "http://realtime.portauthority.org/bustime/api/v3/getvehicles",
+        ROUTES = "http://realtime.portauthority.org/bustime/api/v3/getroutes",
+        R_DIRECTIONS = "http://realtime.portauthority.org/bustime/api/v3/getdirections",
+        STOPS = "http://realtime.portauthority.org/bustime/api/v3/getstops",
+        R_GEO = "http://realtime.portauthority.org/bustime/api/v3/getpatterns",
+        PREDICTION = "http://realtime.portauthority.org/bustime/api/v3/getpredictions",
+        BULLETINS = "http://realtime.portauthority.org/bustime/api/v3/getservicebulletins"
     )
     
     RESPONSE_TOKEN = "bustime-response"
     ERROR_TOKEN = "error"
     STRPTIME = "%Y%m%d %H:%M:%S"
+    RTPI_DATAFEED_NAME = "Port Authority Bus"
     
-    def __init__(self, apikey, locale="en_US", _format="json", tmres="s"):
+    def __init__(self, apikey, locale="en_US", _format="json", tmres="s", rtpidatafeed = RTPI_DATAFEED_NAME):
         self.key = apikey
         self.format = _format
         self.args = dict(
             localestring = locale,
-            tmres = tmres
+            tmres = tmres,
+            rtpidatafeed = quote_plus(rtpidatafeed), # feed name may include spaces
         )
             
     def endpoint(self, endpt, argdict=None):
