@@ -10,11 +10,11 @@ class TestAPI(unittest.TestCase):
         
 class TestEndpoint(TestAPI):
     def test_vehicle(self):
-        url = "http://realtime.portauthority.org/bustime/api/v1/getvehicles?key=BOGUSAPIKEY&localestring=en_US&tmres=s"
+        url = "http://realtime.portauthority.org/bustime/api/v3/getvehicles?key=BOGUSAPIKEY&localestring=en_US&rtpidatafeed=Port+Authority+Bus&tmres=s"
         self.assertEqual( self.api.endpoint('VEHICLES'), url )
     
     def test_pdict(self):
-        url = 'http://realtime.portauthority.org/bustime/api/v1/getpredictions?key=BOGUSAPIKEY&localestring=en_US&tmres=s&rt=28X&stpid=4123'
+        url = 'http://realtime.portauthority.org/bustime/api/v3/getpredictions?key=BOGUSAPIKEY&localestring=en_US&rtpidatafeed=Port+Authority+Bus&tmres=s&rt=28X&stpid=4123'
         generated = self.api.endpoint('PREDICTION', dict(stpid=4123, rt='28X') )
         self.assertEqual( generated, url )
         
